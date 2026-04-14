@@ -7,16 +7,17 @@ import {
   Users,
   Timer,
   Grid3X3,
-  Lock,
   ShieldCheck,
   ShieldAlert,
 } from "lucide-react";
 
 const APP_CONFIG = {
-  ADMIN_PASSWORD: "dlstkddn!@#gotmffl!@#",
+  ADMIN_PASSWORD: "admin1234",
 };
 
-function shuffleArray(array) {
+const STORAGE_KEY = "seat-randomizer-state-v1";
+
+function shuffleArray<T>(array: T[]): T[] {
   const copied = [...array];
   for (let i = copied.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -25,8 +26,8 @@ function shuffleArray(array) {
   return copied;
 }
 
-function buildSeatLabels(rows, cols) {
-  const seats = [];
+function buildSeatLabels(rows: number, cols: number): string[] {
+  const seats: string[] = [];
   for (let r = 0; r < rows; r++) {
     const rowLabel = String.fromCharCode(65 + r);
     for (let c = 1; c <= cols; c++) {
@@ -36,7 +37,7 @@ function buildSeatLabels(rows, cols) {
   return seats;
 }
 
-function parseExcludedSeats(text) {
+function parseExcludedSeats(text: string): Set<string> {
   return new Set(
     text
       .split(/[\s,]+/)
@@ -45,14 +46,17 @@ function parseExcludedSeats(text) {
   );
 }
 
-function parseFixedSeats(text) {
+function parseFixedSeats(text: string): {
+  fixedMap: Record<string, string>;
+  errors: string[];
+} {
   const lines = text
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const fixedMap = {};
-  const errors = [];
+  const fixedMap: Record<string, string> = {};
+  const errors: string[] = [];
 
   lines.forEach((line, index) => {
     const parts = line.split("=");
@@ -70,7 +74,7 @@ function parseFixedSeats(text) {
     }
 
     if (fixedMap[seat]) {
-      errors.push(`${index + 1}번째 줄 중복 그룹: ${seat}`);
+      errors.push(`${index + 1}번째 줄 중복 좌석: ${seat}`);
       return;
     }
 
@@ -80,14 +84,14 @@ function parseFixedSeats(text) {
   return { fixedMap, errors };
 }
 
-function formatTime(seconds) {
+function formatTime(seconds: number): string {
   const s = Math.max(0, seconds);
   const min = String(Math.floor(s / 60)).padStart(2, "0");
   const sec = String(s % 60).padStart(2, "0");
   return `${min}:${sec}`;
 }
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     backgroundColor: "#f1f5f9",
@@ -308,22 +312,59 @@ const styles = {
 };
 
 export default function RandomSeatCountdownApp() {
-  const [adminPasswordInput, setAdminPasswordInput] = useState("");
-  const [isEditUnlocked, setIsEditUnlocked] = useState(false);
-  const [adminMessage, setAdminMessage] = useState("");
-  const [namesText, setNamesText] = useState(
-    "김정직\n최열정\n홍창의\n한존중"
+  const [adminPasswordInput, setAdminPasswordInput] = useState<string>("");
+  const [isEditUnlocked, setIsEditUnlocked] = useState<boolean>(false);
+  const [adminMessage, setAdminMessage] = useState<string>("");
+
+  const [namesText, setNamesText] = useState<string>(
+    "김민수\n이서연\n박준호\n최지우\n정하늘\n한유진\n오세훈\n윤지민\n장도윤\n임서현"
   );
-  const [fixedSeatsText, setFixedSeatsText] = useState("A1=김정직\nB2=최열정");
-  const [rows, setRows] = useState(3);
-  const [cols, setCols] = useState(4);
-  const [countdownSeconds, setCountdownSeconds] = useState(5);
-  const [excludedText, setExcludedText] = useState("");
-  const [revealed, setRevealed] = useState(false);
-  const [remaining, setRemaining] = useState(5);
-  const [isRunning, setIsRunning] = useState(false);
-  const [seatMap, setSeatMap] = useState({});
-  const timerRef = useRef(null);
+
+  const [fixedSeatsText, setFixedSeatsText] = useState<string>(
+    "A1=김민수\nB2=이서연"
+  );
+
+  const [rows, setRows] = useState<number>(3);
+  const [cols, setCols] = useState<number>(4);
+  const [countdownSeconds, setCountdownSeconds] = useState<number>(5);
+  const [excludedText, setExcludedText] = useState<string>("");
+
+  const [revealed, setRevealed] = useState<boolean>(false);
+  const [remaining, setRemaining] = useState<number>(5);
+  const [isRunning, setIsRunning] = useState<boolean>(false);
+  const [seatMap, setSeatMap] = useState<Record<string, string>>({});
+
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+
+    try {
+      const parsed = JSON.parse(saved);
+
+      if (parsed.namesText !== undefined) setNamesText(parsed.namesText);
+      if (parsed.fixedSeatsText !== undefined) setFixedSeatsText(parsed.fixedSeatsText);
+      if (parsed.rows !== undefined) setRows(parsed.rows);
+      if (parsed.cols !== undefined) setCols(parsed.cols);
+      if (parsed.countdownSeconds !== undefined) setCountdownSeconds(parsed.countdownSeconds);
+      if (parsed.excludedText !== undefined) setExcludedText(parsed.excludedText);
+      if (parsed.seatMap !== undefined) setSeatMap(parsed.seatMap);
+      if (parsed.revealed !== undefined) setRevealed(parsed.revealed);
+
+      setIsRunning(false);
+      setRemaining(parsed.countdownSeconds ?? 5);
+      setIsEditUnlocked(false);
+      setAdminPasswordInput("");
+      setAdminMessage(
+        parsed.revealed
+          ? "저장된 배치 결과를 불러왔습니다. 수정하려면 관리자 비밀번호를 다시 입력해 주세요."
+          : "관리자 인증 전에는 옵션 설정값이 표시되지 않습니다."
+      );
+    } catch (error) {
+      console.error("저장된 상태 복원 실패:", error);
+    }
+  }, []);
 
   const names = useMemo(() => {
     return namesText
@@ -359,7 +400,7 @@ export default function RandomSeatCountdownApp() {
   }, [fixedSeatEntries, excludedSeats]);
 
   const duplicateFixedNames = useMemo(() => {
-    const countMap = {};
+    const countMap: Record<string, number> = {};
     Object.values(fixedMap).forEach((name) => {
       countMap[name] = (countMap[name] || 0) + 1;
     });
@@ -371,7 +412,7 @@ export default function RandomSeatCountdownApp() {
   }, [fixedMap, names]);
 
   const validFixedMap = useMemo(() => {
-    const next = {};
+    const next: Record<string, string> = {};
     Object.entries(fixedMap).forEach(([seat, name]) => {
       const isSeatValid = allSeats.includes(seat);
       const isExcluded = excludedSeats.has(seat);
@@ -397,6 +438,30 @@ export default function RandomSeatCountdownApp() {
   const capacity = availableSeats.length;
   const overflow = names.length - capacity;
 
+  useEffect(() => {
+    const stateToSave = {
+      namesText,
+      fixedSeatsText,
+      rows,
+      cols,
+      countdownSeconds,
+      excludedText,
+      revealed,
+      seatMap,
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+  }, [
+    namesText,
+    fixedSeatsText,
+    rows,
+    cols,
+    countdownSeconds,
+    excludedText,
+    revealed,
+    seatMap,
+  ]);
+
   const stopTimer = () => {
     if (timerRef.current !== null) {
       window.clearInterval(timerRef.current);
@@ -418,16 +483,16 @@ export default function RandomSeatCountdownApp() {
     }
   };
 
-  const lockEditing = (message) => {
+  const lockEditing = (message?: string) => {
     setIsEditUnlocked(false);
     setAdminPasswordInput("");
     setAdminMessage(
-      message || "관리자 잠금 상태입니다."
+      message || "관리자 잠금 상태입니다. 수정하려면 비밀번호를 다시 입력해 주세요."
     );
   };
 
   const generateSeatMap = () => {
-    const nextMap = { ...validFixedMap };
+    const nextMap: Record<string, string> = { ...validFixedMap };
     const shuffledNames = shuffleArray(remainingNames);
     const shuffledSeats = shuffleArray(remainingSeats);
 
@@ -440,7 +505,7 @@ export default function RandomSeatCountdownApp() {
 
   const startDraw = () => {
     if (!isEditUnlocked) {
-      alert("관리자 비밀번호 인증 후 실행 가능합니다.");
+      alert("관리자 비밀번호 인증 후에만 설정 수정 및 추첨 실행이 가능합니다.");
       return;
     }
 
@@ -457,17 +522,17 @@ export default function RandomSeatCountdownApp() {
     }
 
     if (!availableSeats.length) {
-      alert("사용 가능한 그룹이 없습니다. 제외 그룹 설정을 확인해 주세요.");
+      alert("사용 가능한 좌석이 없습니다. 제외 좌석 설정을 확인해 주세요.");
       return;
     }
 
     if (fixedSeatErrors.length > 0) {
-      alert("고정 그룹 입력 형식을 먼저 확인해 주세요.");
+      alert("고정 좌석 입력 형식을 먼저 확인해 주세요.");
       return;
     }
 
     if (duplicateFixedNames.length > 0) {
-      alert("고정 그룹에 같은 이름이 중복 지정되어 있습니다.");
+      alert("고정 좌석에 같은 이름이 중복 지정되어 있습니다.");
       return;
     }
 
@@ -477,7 +542,7 @@ export default function RandomSeatCountdownApp() {
     setIsRunning(true);
     setRemaining(Number(countdownSeconds));
 
-    lockEditing("추첨이 시작되었습니다.");
+    lockEditing("추첨이 시작되어 화면이 잠겼습니다. 다시 수정하려면 관리자 비밀번호를 다시 입력해 주세요.");
 
     let current = Number(countdownSeconds);
     timerRef.current = window.setInterval(() => {
@@ -503,6 +568,8 @@ export default function RandomSeatCountdownApp() {
     setRevealed(false);
     setRemaining(Number(countdownSeconds));
     setSeatMap({});
+
+    localStorage.removeItem(STORAGE_KEY);
 
     lockEditing("초기화 후 화면이 다시 잠겼습니다. 다시 수정하려면 비밀번호를 입력해 주세요.");
   };
@@ -594,7 +661,7 @@ export default function RandomSeatCountdownApp() {
               </div>
 
               <div style={styles.field}>
-                <label style={styles.label}>고정 그룹</label>
+                <label style={styles.label}>고정 좌석</label>
                 <textarea
                   value={fixedSeatsText}
                   onChange={(e) => setFixedSeatsText(e.target.value)}
@@ -602,7 +669,7 @@ export default function RandomSeatCountdownApp() {
                   style={{ ...styles.textarea, minHeight: "130px" }}
                 />
                 <div style={styles.helper}>
-                  한 줄에 하나씩 입력해 주세요. 형식은 <strong>그룹=이름</strong> 입니다.
+                  한 줄에 하나씩 입력해 주세요. 형식은 <strong>좌석=이름</strong> 입니다.
                 </div>
 
                 {(fixedSeatErrors.length > 0 ||
@@ -615,13 +682,13 @@ export default function RandomSeatCountdownApp() {
                       <div key={`format-${idx}`}>- {msg}</div>
                     ))}
                     {invalidFixedSeats.map((seat) => (
-                      <div key={`invalid-${seat}`}>- 존재하지 않는 그룹입니다: {seat}</div>
+                      <div key={`invalid-${seat}`}>- 존재하지 않는 좌석입니다: {seat}</div>
                     ))}
                     {excludedFixedSeats.map((seat) => (
-                      <div key={`excluded-${seat}`}>- 제외 그룹과 중복되었습니다: {seat}</div>
+                      <div key={`excluded-${seat}`}>- 제외 좌석과 중복되었습니다: {seat}</div>
                     ))}
                     {duplicateFixedNames.map((name) => (
-                      <div key={`dup-${name}`}>- 같은 이름이 여러 그룹에 고정되었습니다: {name}</div>
+                      <div key={`dup-${name}`}>- 같은 이름이 여러 좌석에 고정되었습니다: {name}</div>
                     ))}
                     {fixedNamesNotInList.map((name, idx) => (
                       <div key={`notin-${name}-${idx}`}>- 참여자 목록에 없는 이름입니다: {name}</div>
@@ -668,14 +735,14 @@ export default function RandomSeatCountdownApp() {
               </div>
 
               <div style={styles.field}>
-                <label style={styles.label}>제외 그룹</label>
+                <label style={styles.label}>제외 좌석</label>
                 <input
                   value={excludedText}
                   onChange={(e) => setExcludedText(e.target.value)}
                   placeholder="예: A3, B4, C2"
                   style={styles.input}
                 />
-                <div style={styles.helper}>쉼표 또는 공백으로 여러 그룹을 입력할 수 있습니다.</div>
+                <div style={styles.helper}>쉼표 또는 공백으로 여러 좌석을 입력할 수 있습니다.</div>
               </div>
 
               <div style={{ ...styles.grid2, marginBottom: "18px" }}>
@@ -699,31 +766,15 @@ export default function RandomSeatCountdownApp() {
 
                 <div style={styles.statBox}>
                   <div style={styles.statLabel}>
-                    <Grid3X3 size={16} /> 사용 가능 그룹
+                    <Grid3X3 size={16} /> 사용 가능 좌석
                   </div>
                   <div style={styles.statValue}>{capacity}석</div>
                 </div>
               </div>
 
-              <div style={{ ...styles.grid2, marginBottom: "10px" }}>
-                <div style={styles.statBox}>
-                  <div style={styles.statLabel}>
-                    <Lock size={16} /> 유효한 고정 그룹
-                  </div>
-                  <div style={styles.statValue}>{Object.keys(validFixedMap).length}건</div>
-                </div>
-
-                <div style={styles.statBox}>
-                  <div style={styles.statLabel}>
-                    <ShieldCheck size={16} /> 수정 상태
-                  </div>
-                  <div style={styles.statValue}>열림</div>
-                </div>
-              </div>
-
               {overflow > 0 && (
                 <div style={styles.warning}>
-                  그룹보다 참여자가 {overflow}명 더 많습니다. 초과 인원은 미배정 처리됩니다.
+                  좌석보다 참여자가 {overflow}명 더 많습니다. 초과 인원은 미배정 처리됩니다.
                 </div>
               )}
             </div>
@@ -827,12 +878,15 @@ export default function RandomSeatCountdownApp() {
 
           <div style={styles.card}>
             <div style={styles.seatGridWrap}>
-              <h2 style={styles.seatGridTitle}>그룹 배치도</h2>
+              <h2 style={styles.seatGridTitle}>좌석 배치도</h2>
               <div
                 style={{
                   display: "grid",
                   gap: "12px",
-                  gridTemplateColumns: `repeat(${Math.max(1, Number(cols))}, minmax(0, 1fr))`,
+                  gridTemplateColumns: `repeat(${Math.max(
+                    1,
+                    Number(cols)
+                  )}, minmax(0, 1fr))`,
                 }}
               >
                 {allSeats.map((seat) => {
@@ -869,7 +923,9 @@ export default function RandomSeatCountdownApp() {
                       {excluded ? (
                         <div style={{ fontSize: "14px", fontWeight: 600 }}>사용 안 함</div>
                       ) : revealed ? (
-                        <div style={{ fontSize: "16px", fontWeight: 700, wordBreak: "keep-all" }}>
+                        <div
+                          style={{ fontSize: "16px", fontWeight: 700, wordBreak: "keep-all" }}
+                        >
                           {assignedName || "빈자리"}
                         </div>
                       ) : (
@@ -887,7 +943,9 @@ export default function RandomSeatCountdownApp() {
           {revealed && unassignedNames.length > 0 && (
             <div style={styles.card}>
               <div style={styles.cardHeader}>
-                <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "#1e293b" }}>
+                <h2
+                  style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "#1e293b" }}
+                >
                   미배정 인원
                 </h2>
               </div>
@@ -902,8 +960,6 @@ export default function RandomSeatCountdownApp() {
               </div>
             </div>
           )}
-
-          
         </div>
       </div>
     </div>
