@@ -903,24 +903,7 @@ export default function RandomSeatCountdownApp() {
             </div>
           )}
 
-          {revealed && Object.keys(validFixedMap).length > 0 && (
-            <div style={styles.card}>
-              <div style={styles.cardHeader}>
-                <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "#1e293b" }}>
-                  적용된 고정 그룹
-                </h2>
-              </div>
-              <div style={styles.cardBody}>
-                <div style={styles.tagWrap}>
-                  {Object.entries(validFixedMap).map(([seat, name]) => (
-                    <span key={`${seat}-${name}`} style={styles.tag}>
-                      {seat} : {name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+          
         </div>
       </div>
     </div>
